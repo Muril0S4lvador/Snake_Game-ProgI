@@ -6,6 +6,7 @@
 #define CABECA_LADOD '>'
 #define CABECA_CIMA '^'
 #define CABECA_BAIXO 'v'
+#define CORPO 'o'
 #define CONTINUE 'c'
 #define MOVE_HORARIO 'h'
 #define MOVE_ANTIHORARIO 'a'
@@ -13,7 +14,15 @@
 #define COMIDA '*'
 #define DINHEIRO '$'
 #define PAREDE '#'
+#define PORTAL '@'
 #define MAX 100
+#define NADA 5
+#define CORPO_INT 1
+#define PONTOS 2
+#define MORTE 3
+#define PORTAL_INT 4
+#define GANHOU 1
+#define PERDEU 0
 
 /* Structs do Programa */
 
@@ -32,7 +41,7 @@ typedef struct{
     int colunaAnterior;
     int linhaAtual;
     int colunaAtual;
-    tCorpo corpo[MAX];
+    tCorpo corpos[MAX];
 } tCobra;
 
 typedef struct{
@@ -69,14 +78,20 @@ tCobra AlteraPosicaoAnterior(tCobra cobra);
 tCobra MovimentaCobraHorario(tCobra cobra, char movimento);
 tCobra MovimentaCobraAntiHorario(tCobra cobra, char movimento);
 tCobra MovimentaCobraContinue(tCobra cobra, char movimento);
+tCobra AumentaTamanho(tCobra cobra);
 
 tMapa InicializaMapa();
 tMapa DefineVazioAtras(tMapa mapa, tCobra cobra);
 tMapa DefineCabeca(tMapa mapa, tCobra cobra);
+tMapa DiminuiComidasMapa(tMapa mapa);
+tMapa ImprimeMaisUmCorpo(tMapa mapa, tCobra cobra);
 //tMapa ImprimeMapaDepoisDoMovimento();
 
-
 void ImprimeInicializacao(tMapa mapa, tCobra cobra);
+void ImprimeResultado(int num, FILE *saida);
+
+int AtualizaJogo(tMapa mapa, tCobra cobra);
+int DefineGanhouOuPerdeu(tMapa mapa);
 
 /*Funcao Main*/
 
@@ -86,6 +101,7 @@ int main(int argc, char **argv){
     jogo = InicializaJogo(jogo);
     jogo = RealizaJogo(jogo);
 
+    return 0;
 }
 
 /* Codigo das Funcoes */
@@ -102,41 +118,59 @@ tJogo InicializaJogo(tJogo jogo){
 }
 
 tJogo RealizaJogo(tJogo jogo){
+    /* Essa funcao tem o intuitod emover a cobra e interpretar os caracteres do mapa */
+
     FILE *movimentos, *saida;
     char movimento; //variavel para auxiliar na leitura dos comandos de movimento
+    int atualiza, ganhou; //variaveis p auxiliar na atualizacao da situacao do jogo
 
     movimentos = fopen("movimentos.txt", "r");
     saida = fopen("saida.txt", "w");
 
     while(fscanf(movimentos, "%c\n", &movimento) == 1){
 
-        if(movimento == MOVE_HORARIO){
+        //posicao atual da cobra vira anterior
+        jogo.cobra = AlteraPosicaoAnterior(jogo.cobra);
 
-            //posicao atual da cobra vira anterior
-            jogo.cobra = AlteraPosicaoAnterior(jogo.cobra);
+        if(movimento == MOVE_HORARIO){
 
             //move a cobra e faz a sua cabeca ser imprimida no local certo
             jogo.mapa = DefineVazioAtras(jogo.mapa, jogo.cobra);
             jogo.cobra = MovimentaCobraHorario(jogo.cobra, movimento);
-            jogo.mapa = DefineCabeca(jogo.mapa, jogo.cobra);
 
         } else if(movimento == MOVE_ANTIHORARIO){
 
-            jogo.cobra = AlteraPosicaoAnterior(jogo.cobra);
-
             jogo.mapa = DefineVazioAtras(jogo.mapa, jogo.cobra);
             jogo.cobra = MovimentaCobraAntiHorario(jogo.cobra, movimento);
-            jogo.mapa = DefineCabeca(jogo.mapa, jogo.cobra);
 
         } else if(movimento == CONTINUE){
 
-            jogo.cobra = AlteraPosicaoAnterior(jogo.cobra);
-
             jogo.mapa = DefineVazioAtras(jogo.mapa, jogo.cobra);
             jogo.cobra = MovimentaCobraContinue(jogo.cobra, movimento);
-            jogo.mapa = DefineCabeca(jogo.mapa, jogo.cobra);
+        }
+
+        //funcao para atualizar o jogo e as consequencias do movimento da cobra
+        atualiza = AtualizaJogo(jogo.mapa, jogo.cobra);
+        if( atualiza == NADA ){
+            //moveSemPontos++
+
+        } else if( atualiza == CORPO_INT ){
+            jogo.cobra = AumentaTamanho(jogo.cobra);
+            jogo.mapa = ImprimeMaisUmCorpo(jogo.mapa, jogo.cobra);
+            jogo.mapa = DiminuiComidasMapa(jogo.mapa);
+            //pontos++;
+
+        } else if( atualiza == PONTOS ){
+            //pontos += 10;
+
+        } else if( atualiza == MORTE ){
+            break;
+
+        } else if( atualiza == PORTAL_INT ){
+            //funcao portal
 
         }
+        jogo.mapa = DefineCabeca(jogo.mapa, jogo.cobra);
 
         //imprime mapa depois do movimento CRIAR FUNCAO TMAPA MAS APENAS DPS DE RESOLVER A PONTUACAO
         fprintf(saida, "\nEstado do jogo apos o movimento '%c':\n", movimento);
@@ -149,10 +183,13 @@ tJogo RealizaJogo(tJogo jogo){
 
             fprintf(saida, "\n");
         }
-
-        fprintf(saida, "Pontuacao: %d\n", 23);
-
+        //fprintf(saida, "Pontuacao: %d\n", 23);
+        fprintf(saida, "Tamanho: %d\n", jogo.cobra.tamanho);
     }
+
+    //CRIAR FUNCAO P IMPRIMIR SE GANHOU OU NAO
+    ganhou = DefineGanhouOuPerdeu(jogo.mapa);
+    ImprimeResultado(ganhou, saida);
 
     fclose(movimentos);
 
@@ -197,18 +234,22 @@ tCobra MovimentaCobraHorario(tCobra cobra, char movimento){
     if(cobra.cabeca == CABECA_BAIXO){
         cobra.colunaAtual--;
         cobra.cabeca = CABECA_LADOE;
+        //movimentoEsquerda++
 
     } else if(cobra.cabeca == CABECA_CIMA){
         cobra.colunaAtual++;
         cobra.cabeca = CABECA_LADOD;
+        //movimentoDireita++
         
     } else if(cobra.cabeca == CABECA_LADOD){
         cobra.linhaAtual++;
         cobra.cabeca = CABECA_BAIXO;
+        //movimentoBaixo++
         
     } else if(cobra.cabeca == CABECA_LADOE){
         cobra.linhaAtual--;
         cobra.cabeca = CABECA_CIMA;
+        //movimentoCima++
     }
 
     return cobra;
@@ -219,18 +260,22 @@ tCobra MovimentaCobraAntiHorario(tCobra cobra, char movimento){
     if(cobra.cabeca == CABECA_BAIXO){
         cobra.colunaAtual++;
         cobra.cabeca = CABECA_LADOD;
+        //movimentoDireita++
 
     } else if(cobra.cabeca == CABECA_CIMA){
         cobra.colunaAtual--;
         cobra.cabeca = CABECA_LADOE;
+        //movimentoEsquerda++
         
     } else if(cobra.cabeca == CABECA_LADOD){
         cobra.linhaAtual--;
         cobra.cabeca = CABECA_CIMA;
+        //movimentoCima++
 
     } else if(cobra.cabeca == CABECA_LADOE){
         cobra.linhaAtual++;
         cobra.cabeca = CABECA_BAIXO;
+        //movimentoBaixo++
     }
 
     return cobra;
@@ -240,16 +285,26 @@ tCobra MovimentaCobraContinue(tCobra cobra, char movimento){
 
     if(cobra.cabeca == CABECA_BAIXO){
         cobra.linhaAtual++;
+        //movimentoBaixo++
 
     } else if(cobra.cabeca == CABECA_CIMA){
         cobra.linhaAtual--;
+        //movimentoCima++
 
     } else if(cobra.cabeca == CABECA_LADOD){
         cobra.colunaAtual++;
+        //movimentoDireita++
 
     } else if(cobra.cabeca == CABECA_LADOE){
         cobra.colunaAtual--;
+        //movimentoEsquerda++
     }
+
+    return cobra;
+}
+
+tCobra AumentaTamanho(tCobra cobra){
+    cobra.tamanho++;
 
     return cobra;
 }
@@ -303,6 +358,18 @@ tMapa DefineCabeca(tMapa mapa, tCobra cobra){
     return mapa;
 }
 
+tMapa DiminuiComidasMapa(tMapa mapa){
+    mapa.comidas--;
+
+    return mapa;
+}
+
+tMapa ImprimeMaisUmCorpo(tMapa mapa, tCobra cobra){
+    mapa.mapa[cobra.linhaAnterior][cobra.colunaAnterior] = CORPO;
+
+    return mapa;
+}
+
 /* Funcoes void */
 
 void ImprimeInicializacao(tMapa mapa, tCobra cobra){
@@ -326,4 +393,38 @@ void ImprimeInicializacao(tMapa mapa, tCobra cobra){
     fprintf(inicializacaof, "\n\n qtd comidas: %d  Tamanho da cobra:%d\n", mapa.comidas, cobra.tamanho);
     
     fclose(inicializacaof);
+}
+
+void ImprimeResultado(int num, FILE *saida){
+    if( num ){
+        fprintf(saida, "Voce venceu!\nPontuacao final: %d\n", 24);
+    } else{
+        fprintf(saida, "Game over!\nPontuacao final: %d\n", 24);
+    }
+}
+
+/* Funcoes int */
+
+int AtualizaJogo(tMapa mapa, tCobra cobra){
+    char atualiza; //variavel p auxiliar na atualizacao da situacao do jogo
+
+    atualiza = mapa.mapa[cobra.linhaAtual][cobra.colunaAtual];
+
+    if( atualiza == COMIDA )
+        return 1;
+    else if( atualiza == DINHEIRO )
+        return 2;
+    else if( atualiza == PAREDE )
+        return 3;
+    else if( atualiza == PORTAL )
+        return 4;
+    else
+        return 5;
+}
+
+int DefineGanhouOuPerdeu(tMapa mapa){
+    if( !mapa.comidas ){
+        return 1;
+    } else 
+        return 0;
 }
