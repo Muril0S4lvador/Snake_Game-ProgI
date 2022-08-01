@@ -7,6 +7,7 @@
 #define CABECA_CIMA '^'
 #define CABECA_BAIXO 'v'
 #define CORPO 'o'
+#define CORPO_MORTO 'X'
 #define CONTINUE 'c'
 #define MOVE_HORARIO 'h'
 #define MOVE_ANTIHORARIO 'a'
@@ -14,35 +15,22 @@
 #define COMIDA '*'
 #define DINHEIRO '$'
 #define PAREDE '#'
-#define PORTAL '@'
 #define MAX 100
-#define NADA 5
+#define NADA 0
 #define CORPO_INT 1
 #define PONTOS 2
 #define MORTE 3
 #define PORTAL_INT 4
+#define DIREITA 5
+#define ESQUERDA 6
+#define CIMA 7
+#define BAIXO 8
+#define MOVIMENTOS 9
+#define MOVESEMPONTOS 10
 #define GANHOU 1
 #define PERDEU 0
 
 /* Structs do Programa */
-
-typedef struct{
-    char corpo;
-    int colunaAtual;
-    int linhaAtual;
-    int colunaAnterior;
-    int linhaAnterior;
-} tCorpo;
-
-typedef struct{
-    char cabeca;
-    int tamanho;
-    int linhaAnterior;
-    int colunaAnterior;
-    int linhaAtual;
-    int colunaAtual;
-    tCorpo corpos[MAX];
-} tCobra;
 
 typedef struct{
     int pontuacao;
@@ -53,6 +41,27 @@ typedef struct{
     int moveEsq;
     int moveDir;
 } tEstatisticas;
+
+typedef struct{
+    int colunaAtual;
+    int linhaAtual;
+    int colunaAnterior;
+    int linhaAnterior;
+} tCorpo;
+
+typedef struct{
+    char cabeca;
+    char corpoChar;
+    char movimento;
+    int tamanho;
+    int linhaAnterior;
+    int colunaAnterior;
+    int linhaAtual;
+    int colunaAtual;
+    int morta;
+    tCorpo corpos[MAX];
+    tEstatisticas estatisticas;
+} tCobra;
 
 typedef struct{
     char mapa[MAX][MAX];
@@ -72,26 +81,54 @@ typedef struct{
 
 tJogo InicializaJogo(tJogo jogo);
 tJogo RealizaJogo(tJogo jogo);
+tJogo AtualizaJogo(tJogo jogo, FILE *resumo);
 
 tCobra InicializaCobra(tMapa mapa);
+tCobra DefineCharMovimento(tCobra cobra, char movimento);
 tCobra AlteraPosicaoAnterior(tCobra cobra);
 tCobra MovimentaCobraHorario(tCobra cobra, char movimento);
 tCobra MovimentaCobraAntiHorario(tCobra cobra, char movimento);
 tCobra MovimentaCobraContinue(tCobra cobra, char movimento);
-tCobra AumentaTamanho(tCobra cobra);
+tCobra MovimentaCorpo(tCobra cobra);
+tCobra AumentaTamanho(tMapa mapa, tCobra cobra);
+tCobra AtualizaEstatisticas(tCobra cobra, int id);
+tCobra MataACobra(tCobra cobra);
+tCobra Tunel(tMapa mapa, tCobra cobra);
+
+tCorpo InicializaCorpo(tCobra cobra);
+tCorpo InicializaCorpoAtrasDeCorpo(tCorpo corpo);
+tCorpo AlteraPosicaoAnteriorDeCorpos(tCorpo corpo);
+tCorpo MoveCorpoAtrasDeCabeca(tCobra cobra, tCorpo corpo);
+tCorpo MoveCorpoAtrasDeCorpo(tCorpo anterior, tCorpo corpo);
 
 tMapa InicializaMapa();
 tMapa DefineVazioAtras(tMapa mapa, tCobra cobra);
-tMapa DefineCabeca(tMapa mapa, tCobra cobra);
+tMapa DefineVazioAtrasDeCorpo(tMapa mapa, tCorpo corpo);
+tMapa DefineCabecaECorpo(tMapa mapa, tCobra cobra);
 tMapa DiminuiComidasMapa(tMapa mapa);
-tMapa ImprimeMaisUmCorpo(tMapa mapa, tCobra cobra);
-//tMapa ImprimeMapaDepoisDoMovimento();
+tMapa DefineMaisUmCorpo(tMapa mapa, tCobra cobra);
+tMapa DefineMaisUmCorpoAtrasDeCorpo(tMapa mapa, tCorpo corpo, tCobra cobra);
+tMapa DefinePosicaoCorpo(tMapa mapa, tCobra cobra);
+tMapa DefinePosicaoCorpoAtrasDeCabeca(tMapa mapa, tCobra cobra, tCorpo corpo);
+tMapa DefinePosicaoCorpoAtrasDeCorpo(tMapa mapa, tCorpo corpoAnterior, tCorpo corpo, tCobra cobra);
+
+tEstatisticas InicializaEstatisticas(tEstatisticas estatistica);
+tEstatisticas DefineEstatisticas(tEstatisticas estatistica, int id);
 
 void ImprimeInicializacao(tMapa mapa, tCobra cobra);
-void ImprimeResultado(int num, FILE *saida);
+void ImprimeResultado(int num, FILE *saida, tCobra cobra);
+void ImprimeMapaDepoisDoMovimento(tMapa mapa, tCobra cobra, FILE *saida);
+void ImprimeEstatisticas(tCobra cobra);
+void Estatisticas(tEstatisticas estatisticas, FILE *estatisticasf);
+void ImprimeResumo(tMapa mapa, tCobra cobra, int id, FILE *resumo);
 
-int AtualizaJogo(tMapa mapa, tCobra cobra);
+int IdentificaCaraceterSucessor(tMapa mapa, tCobra cobra);
 int DefineGanhouOuPerdeu(tMapa mapa);
+int ObtemPontuacao(tEstatisticas estatisticas);
+int ObtemNumeroDoMovimento(tEstatisticas estatisticas);
+int CobraMortaOuNao(tCobra cobra);
+
+char ObtemCharDoMovimento(tCobra cobra);
 
 /*Funcao Main*/
 
@@ -100,6 +137,7 @@ int main(int argc, char **argv){
 
     jogo = InicializaJogo(jogo);
     jogo = RealizaJogo(jogo);
+    ImprimeEstatisticas(jogo.cobra);
 
     return 0;
 }
@@ -118,80 +156,90 @@ tJogo InicializaJogo(tJogo jogo){
 }
 
 tJogo RealizaJogo(tJogo jogo){
-    /* Essa funcao tem o intuitod emover a cobra e interpretar os caracteres do mapa */
+    /* Essa funcao tem o intuito de mover a cobra e interpretar os caracteres do mapa */
 
-    FILE *movimentos, *saida;
+    FILE *movimentos, *saida, *resumo;
     char movimento; //variavel para auxiliar na leitura dos comandos de movimento
-    int atualiza, ganhou; //variaveis p auxiliar na atualizacao da situacao do jogo
+    int ganhou, morta; //variaveis p auxiliar na atualizacao da situacao do jogo
 
     movimentos = fopen("movimentos.txt", "r");
     saida = fopen("saida.txt", "w");
+    resumo = fopen("resumo.txt", "w");
 
     while(fscanf(movimentos, "%c\n", &movimento) == 1){
+        jogo.cobra = DefineCharMovimento(jogo.cobra, movimento);
+        jogo.cobra = AtualizaEstatisticas(jogo.cobra, MOVIMENTOS);
 
         //posicao atual da cobra vira anterior
         jogo.cobra = AlteraPosicaoAnterior(jogo.cobra);
+        jogo.mapa = DefineVazioAtras(jogo.mapa, jogo.cobra);
 
         if(movimento == MOVE_HORARIO){
 
             //move a cobra e faz a sua cabeca ser imprimida no local certo
-            jogo.mapa = DefineVazioAtras(jogo.mapa, jogo.cobra);
             jogo.cobra = MovimentaCobraHorario(jogo.cobra, movimento);
 
         } else if(movimento == MOVE_ANTIHORARIO){
 
-            jogo.mapa = DefineVazioAtras(jogo.mapa, jogo.cobra);
             jogo.cobra = MovimentaCobraAntiHorario(jogo.cobra, movimento);
 
         } else if(movimento == CONTINUE){
 
-            jogo.mapa = DefineVazioAtras(jogo.mapa, jogo.cobra);
             jogo.cobra = MovimentaCobraContinue(jogo.cobra, movimento);
         }
+        jogo.cobra = MovimentaCorpo(jogo.cobra);
 
-        //funcao para atualizar o jogo e as consequencias do movimento da cobra
-        atualiza = AtualizaJogo(jogo.mapa, jogo.cobra);
-        if( atualiza == NADA ){
-            //moveSemPontos++
+        jogo = AtualizaJogo(jogo, resumo);
 
-        } else if( atualiza == CORPO_INT ){
-            jogo.cobra = AumentaTamanho(jogo.cobra);
-            jogo.mapa = ImprimeMaisUmCorpo(jogo.mapa, jogo.cobra);
-            jogo.mapa = DiminuiComidasMapa(jogo.mapa);
-            //pontos++;
-
-        } else if( atualiza == PONTOS ){
-            //pontos += 10;
-
-        } else if( atualiza == MORTE ){
-            break;
-
-        } else if( atualiza == PORTAL_INT ){
-            //funcao portal
-
-        }
-        jogo.mapa = DefineCabeca(jogo.mapa, jogo.cobra);
-
-        //imprime mapa depois do movimento CRIAR FUNCAO TMAPA MAS APENAS DPS DE RESOLVER A PONTUACAO
+        //imprime mapa depois do movimento
         fprintf(saida, "\nEstado do jogo apos o movimento '%c':\n", movimento);
-        for(jogo.mapa.l=0; jogo.mapa.l < jogo.mapa.linhas; jogo.mapa.l++){
+        ImprimeMapaDepoisDoMovimento(jogo.mapa, jogo.cobra, saida);
 
-            for(jogo.mapa.c=0; jogo.mapa.c < jogo.mapa.colunas; jogo.mapa.c++){
-
-                fprintf(saida, "%c", jogo.mapa.mapa[jogo.mapa.l][jogo.mapa.c]);
-            }
-
-            fprintf(saida, "\n");
-        }
-        //fprintf(saida, "Pontuacao: %d\n", 23);
-        fprintf(saida, "Tamanho: %d\n", jogo.cobra.tamanho);
+        morta = CobraMortaOuNao(jogo.cobra);
+        if( morta )
+            break;
     }
 
-    //CRIAR FUNCAO P IMPRIMIR SE GANHOU OU NAO
+    //informa se ganhou ou perdeu o jogo
     ganhou = DefineGanhouOuPerdeu(jogo.mapa);
-    ImprimeResultado(ganhou, saida);
+    ImprimeResultado(ganhou, saida, jogo.cobra);
 
     fclose(movimentos);
+    fclose(resumo);
+
+    return jogo;
+}
+
+tJogo AtualizaJogo(tJogo jogo, FILE *resumo){
+    int atualiza;
+
+    //funcao para atualizar o jogo e as consequencias do movimento da cobra
+    atualiza = IdentificaCaraceterSucessor(jogo.mapa, jogo.cobra);
+
+    if( !atualiza ){
+        jogo.cobra = AtualizaEstatisticas(jogo.cobra, MOVESEMPONTOS);
+
+    } else if( atualiza == CORPO_INT ){
+        jogo.cobra = AumentaTamanho(jogo.mapa, jogo.cobra);
+        jogo.mapa = DefineMaisUmCorpo(jogo.mapa, jogo.cobra);
+        jogo.mapa = DiminuiComidasMapa(jogo.mapa);
+
+        jogo.cobra = AtualizaEstatisticas(jogo.cobra, CORPO_INT);
+        ImprimeResumo(jogo.mapa, jogo.cobra, CORPO_INT, resumo);
+
+    } else if( atualiza == PONTOS ){
+        jogo.cobra = AtualizaEstatisticas(jogo.cobra, PONTOS);
+        ImprimeResumo(jogo.mapa, jogo.cobra, PONTOS, resumo);
+
+    } else if( atualiza == MORTE ){
+        jogo.cobra = MataACobra(jogo.cobra);
+        ImprimeResumo(jogo.mapa, jogo.cobra, MORTE, resumo);
+
+    } else if( atualiza == PORTAL_INT ){
+        jogo.cobra = Tunel(jogo.mapa, jogo.cobra);
+
+    }
+    jogo.mapa = DefineCabecaECorpo(jogo.mapa, jogo.cobra);
 
     return jogo;
 }
@@ -212,19 +260,36 @@ tCobra InicializaCobra(tMapa mapa){
                 cobra.colunaAtual = mapa.c;
 
                 cobra.tamanho = 0;
+                cobra.morta = 0;
                 cobra.cabeca = CABECA_LADOD;
+                cobra.corpoChar = CORPO;
             }
         }
     }
+
+    cobra.estatisticas = InicializaEstatisticas(cobra.estatisticas);
+
+    return cobra;
+}
+
+tCobra DefineCharMovimento(tCobra cobra, char movimento){
+    cobra.movimento = movimento;
 
     return cobra;
 }
 
 tCobra AlteraPosicaoAnterior(tCobra cobra){
+    int i;
 
     //posicao atual da cobra vira anterior
     cobra.linhaAnterior = cobra.linhaAtual;
     cobra.colunaAnterior = cobra.colunaAtual;
+
+    if( cobra.tamanho > 0 ){
+        for(i = 0; i < cobra.tamanho; i++){
+            cobra.corpos[i] = AlteraPosicaoAnteriorDeCorpos(cobra.corpos[i]);
+        }
+    }
 
     return cobra;
 }
@@ -234,22 +299,26 @@ tCobra MovimentaCobraHorario(tCobra cobra, char movimento){
     if(cobra.cabeca == CABECA_BAIXO){
         cobra.colunaAtual--;
         cobra.cabeca = CABECA_LADOE;
-        //movimentoEsquerda++
+        
+        cobra.estatisticas = DefineEstatisticas(cobra.estatisticas, ESQUERDA);
 
     } else if(cobra.cabeca == CABECA_CIMA){
         cobra.colunaAtual++;
         cobra.cabeca = CABECA_LADOD;
-        //movimentoDireita++
+        
+        cobra.estatisticas = DefineEstatisticas(cobra.estatisticas, DIREITA);
         
     } else if(cobra.cabeca == CABECA_LADOD){
         cobra.linhaAtual++;
         cobra.cabeca = CABECA_BAIXO;
-        //movimentoBaixo++
+
+        cobra.estatisticas = DefineEstatisticas(cobra.estatisticas, BAIXO);
         
     } else if(cobra.cabeca == CABECA_LADOE){
         cobra.linhaAtual--;
         cobra.cabeca = CABECA_CIMA;
-        //movimentoCima++
+        
+        cobra.estatisticas = DefineEstatisticas(cobra.estatisticas, CIMA);
     }
 
     return cobra;
@@ -260,53 +329,161 @@ tCobra MovimentaCobraAntiHorario(tCobra cobra, char movimento){
     if(cobra.cabeca == CABECA_BAIXO){
         cobra.colunaAtual++;
         cobra.cabeca = CABECA_LADOD;
-        //movimentoDireita++
+        
+        cobra.estatisticas = DefineEstatisticas(cobra.estatisticas, DIREITA);
 
     } else if(cobra.cabeca == CABECA_CIMA){
         cobra.colunaAtual--;
         cobra.cabeca = CABECA_LADOE;
-        //movimentoEsquerda++
+        
+        cobra.estatisticas = DefineEstatisticas(cobra.estatisticas, ESQUERDA);
         
     } else if(cobra.cabeca == CABECA_LADOD){
         cobra.linhaAtual--;
         cobra.cabeca = CABECA_CIMA;
-        //movimentoCima++
+        
+        cobra.estatisticas = DefineEstatisticas(cobra.estatisticas, CIMA);
 
     } else if(cobra.cabeca == CABECA_LADOE){
         cobra.linhaAtual++;
         cobra.cabeca = CABECA_BAIXO;
-        //movimentoBaixo++
+
+        cobra.estatisticas = DefineEstatisticas(cobra.estatisticas, BAIXO);
     }
 
     return cobra;
 }
 
 tCobra MovimentaCobraContinue(tCobra cobra, char movimento){
+    int i;
 
     if(cobra.cabeca == CABECA_BAIXO){
         cobra.linhaAtual++;
-        //movimentoBaixo++
+
+        cobra.estatisticas = DefineEstatisticas(cobra.estatisticas, BAIXO);
 
     } else if(cobra.cabeca == CABECA_CIMA){
         cobra.linhaAtual--;
-        //movimentoCima++
+        
+        cobra.estatisticas = DefineEstatisticas(cobra.estatisticas, CIMA);
 
     } else if(cobra.cabeca == CABECA_LADOD){
         cobra.colunaAtual++;
-        //movimentoDireita++
+        
+        cobra.estatisticas = DefineEstatisticas(cobra.estatisticas, DIREITA);
 
     } else if(cobra.cabeca == CABECA_LADOE){
         cobra.colunaAtual--;
-        //movimentoEsquerda++
+        
+        cobra.estatisticas = DefineEstatisticas(cobra.estatisticas, ESQUERDA);
     }
 
     return cobra;
 }
 
-tCobra AumentaTamanho(tCobra cobra){
-    cobra.tamanho++;
+tCobra MovimentaCorpo(tCobra cobra){
+    int i;
+
+    if( cobra.tamanho > 0 ){
+        for(i = 0; i < cobra.tamanho; i++){
+            if(i == 0)
+                cobra.corpos[i] = MoveCorpoAtrasDeCabeca(cobra, cobra.corpos[i]);
+            else
+                cobra.corpos[i] = MoveCorpoAtrasDeCorpo(cobra.corpos[i-1], cobra.corpos[i]);
+        }
+    }
 
     return cobra;
+}
+
+tCobra AumentaTamanho(tMapa mapa, tCobra cobra){
+   
+    cobra.tamanho++;
+    cobra.corpos[cobra.tamanho-1] = InicializaCorpo(cobra);
+
+    return cobra;
+}
+
+tCobra AtualizaEstatisticas(tCobra cobra, int id){
+    cobra.estatisticas = DefineEstatisticas(cobra.estatisticas, id);
+
+    return cobra;
+}
+
+tCobra MataACobra(tCobra cobra){
+    cobra.morta = 1;
+    cobra.cabeca = CORPO_MORTO;
+    cobra.corpoChar = CORPO_MORTO;
+
+    return cobra;
+}
+
+tCobra Tunel(tMapa mapa, tCobra cobra){
+
+    if( cobra.linhaAtual < 0 ){
+        cobra.linhaAtual = mapa.linhas-1;
+
+    } else if( cobra.colunaAtual < 0 ){
+        cobra.colunaAtual = mapa.colunas-1;
+
+    } else if( cobra.linhaAtual >= mapa.linhas ){
+        cobra.linhaAtual = 0;
+
+    } else if( cobra.colunaAtual >= mapa.colunas ){
+        cobra.colunaAtual = 0;
+
+    }
+
+    return cobra;
+}
+
+/* Funcoes tCorpo */
+
+tCorpo InicializaCorpo(tCobra cobra){
+    tCorpo corpo;
+
+    if(cobra.tamanho == 1){
+        corpo.linhaAtual = cobra.linhaAnterior;
+        corpo.colunaAtual = cobra.colunaAnterior;
+
+    } else if(cobra.tamanho > 1) {
+        corpo = InicializaCorpoAtrasDeCorpo(cobra.corpos[cobra.tamanho-2]);
+
+    }
+
+    return corpo;
+}
+
+tCorpo InicializaCorpoAtrasDeCorpo(tCorpo corpo){
+    tCorpo corpocriado;
+
+    corpocriado.linhaAtual = corpo.linhaAnterior;
+    corpocriado.colunaAtual = corpo.colunaAnterior;
+
+    return corpocriado;
+}
+
+tCorpo AlteraPosicaoAnteriorDeCorpos(tCorpo corpo){
+
+    corpo.linhaAnterior = corpo.linhaAtual;
+    corpo.colunaAnterior = corpo.colunaAtual;
+
+    return corpo;
+}
+
+tCorpo MoveCorpoAtrasDeCabeca(tCobra cobra, tCorpo corpo){
+
+    corpo.linhaAtual = cobra.linhaAnterior;
+    corpo.colunaAtual = cobra.colunaAnterior;
+
+    return corpo;
+}
+
+tCorpo MoveCorpoAtrasDeCorpo(tCorpo anterior, tCorpo corpo){
+    corpo.linhaAtual = anterior.linhaAnterior;
+    corpo.colunaAtual = anterior.colunaAnterior;
+
+    return corpo;
 }
 
 /* Funcoes tMapa */
@@ -345,15 +522,27 @@ tMapa InicializaMapa(){
 }
 
 tMapa DefineVazioAtras(tMapa mapa, tCobra cobra){
-    //limpa a cabeca da cobra na posicao anterior
-    mapa.mapa[cobra.linhaAnterior][cobra.colunaAnterior] = ESPACO_VAZIO;
+    //limpa a cobra na posicao anterior
+    if(cobra.tamanho > 0){
+        mapa = DefineVazioAtrasDeCorpo( mapa, cobra.corpos[cobra.tamanho-1] );
+
+    } else
+        mapa.mapa[cobra.linhaAnterior][cobra.colunaAnterior] = ESPACO_VAZIO;
 
     return mapa;
 }
 
-tMapa DefineCabeca(tMapa mapa, tCobra cobra){
+tMapa DefineVazioAtrasDeCorpo(tMapa mapa, tCorpo corpo){
+    mapa.mapa[corpo.linhaAnterior][corpo.colunaAnterior] = ESPACO_VAZIO;
+    
+    return mapa;
+}
+
+tMapa DefineCabecaECorpo(tMapa mapa, tCobra cobra){
     //faz com que a cabeca da cobra seja imprimida na posicao atual
     mapa.mapa[cobra.linhaAtual][cobra.colunaAtual] = cobra.cabeca;
+
+    mapa = DefinePosicaoCorpo(mapa, cobra);
 
     return mapa;
 }
@@ -364,10 +553,92 @@ tMapa DiminuiComidasMapa(tMapa mapa){
     return mapa;
 }
 
-tMapa ImprimeMaisUmCorpo(tMapa mapa, tCobra cobra){
-    mapa.mapa[cobra.linhaAnterior][cobra.colunaAnterior] = CORPO;
+tMapa DefineMaisUmCorpo(tMapa mapa, tCobra cobra){
+    if( cobra.tamanho == 1 ){
+        mapa.mapa[cobra.linhaAnterior][cobra.colunaAnterior] = cobra.corpoChar;
+    } else {
+        mapa = DefineMaisUmCorpoAtrasDeCorpo(mapa, cobra.corpos[ cobra.tamanho-1 ], cobra);
+    }
 
     return mapa;
+}
+
+tMapa DefineMaisUmCorpoAtrasDeCorpo(tMapa mapa, tCorpo corpo, tCobra cobra){
+    mapa.mapa[corpo.linhaAtual][corpo.colunaAtual] = cobra.corpoChar;
+
+    return mapa;
+}
+
+tMapa DefinePosicaoCorpo(tMapa mapa, tCobra cobra){
+    int i;
+
+    //faz com que o corpo da cobra seja imprimida na posicao atual
+    for(i = 0; i < cobra.tamanho; i++){
+        if(i == 0){
+            mapa = DefinePosicaoCorpoAtrasDeCabeca(mapa, cobra, cobra.corpos[i]);
+        } else {
+            mapa = DefinePosicaoCorpoAtrasDeCorpo(mapa, cobra.corpos[i-1], cobra.corpos[i], cobra);
+        }
+    }
+
+    return mapa;
+}
+
+tMapa DefinePosicaoCorpoAtrasDeCabeca(tMapa mapa, tCobra cobra, tCorpo corpo){
+    mapa.mapa[corpo.linhaAtual][corpo.colunaAtual] = cobra.corpoChar;
+
+    return mapa;
+}
+
+tMapa DefinePosicaoCorpoAtrasDeCorpo(tMapa mapa, tCorpo corpoAnterior, tCorpo corpo, tCobra cobra){
+    mapa.mapa[corpo.linhaAtual][corpo.colunaAtual] = cobra.corpoChar;
+
+    return mapa;
+}
+
+/* Funcoes tEstatisticas */
+
+tEstatisticas InicializaEstatisticas(tEstatisticas estatistica){
+
+    estatistica.moveBaixo = 0;
+    estatistica.moveCima = 0;
+    estatistica.moveDir = 0;
+    estatistica.moveEsq = 0;
+    estatistica.moveSemPonto = 0;
+    estatistica.pontuacao = 0;
+    estatistica.qtdmovimentos = 0;
+
+    return estatistica;
+}
+
+tEstatisticas DefineEstatisticas(tEstatisticas estatistica, int id){
+
+    if( id == MOVESEMPONTOS ){
+        estatistica.moveSemPonto++;
+
+    } else if( id == CORPO_INT ){
+        estatistica.pontuacao++;
+
+    } else if( id == PONTOS ){
+        estatistica.pontuacao += 10;
+
+    }  else if( id == DIREITA ){
+        estatistica.moveDir++;
+
+    } else if( id == ESQUERDA ){
+        estatistica.moveEsq++;
+
+    } else if( id == CIMA ){
+        estatistica.moveCima++;
+
+    } else if( id == BAIXO ){
+        estatistica.moveBaixo++;
+
+    } else if( id == MOVIMENTOS ){
+        estatistica.qtdmovimentos++;
+    }
+
+    return estatistica;
 }
 
 /* Funcoes void */
@@ -389,37 +660,95 @@ void ImprimeInicializacao(tMapa mapa, tCobra cobra){
 
     fprintf(inicializacaof, "A cobra comecara o jogo na linha %d e coluna %d\n", cobra.linhaAtual+1, cobra.colunaAtual+1);
                                                     //como comeco lendo a partir do 0, pra imprimir corretamente preciso adicionar +1
-
-    fprintf(inicializacaof, "\n\n qtd comidas: %d  Tamanho da cobra:%d\n", mapa.comidas, cobra.tamanho);
     
     fclose(inicializacaof);
 }
 
-void ImprimeResultado(int num, FILE *saida){
+void ImprimeResultado(int num, FILE *saida, tCobra cobra){
+    int pontuacao;
+
+    pontuacao = ObtemPontuacao(cobra.estatisticas);
+
     if( num ){
-        fprintf(saida, "Voce venceu!\nPontuacao final: %d\n", 24);
+        fprintf(saida, "Voce venceu!\nPontuacao final: %d\n", pontuacao);
     } else{
-        fprintf(saida, "Game over!\nPontuacao final: %d\n", 24);
+        fprintf(saida, "Game over!\nPontuacao final: %d\n", pontuacao);
+    }
+}
+
+void ImprimeMapaDepoisDoMovimento(tMapa mapa, tCobra cobra, FILE *saida){
+    int pontuacao;
+    pontuacao = ObtemPontuacao(cobra.estatisticas);
+
+    for(mapa.l=0; mapa.l < mapa.linhas; mapa.l++){
+
+            for(mapa.c=0; mapa.c < mapa.colunas; mapa.c++){
+
+                fprintf(saida, "%c", mapa.mapa[mapa.l][mapa.c]);
+            }
+
+            fprintf(saida, "\n");
+        }
+        fprintf(saida, "Pontuacao: %d\n", pontuacao);
+}
+
+void ImprimeEstatisticas(tCobra cobra){
+    FILE *estatisticas;
+    estatisticas = fopen("estatisticas.txt", "w");
+
+    Estatisticas(cobra.estatisticas, estatisticas);
+
+    fclose(estatisticas);
+}
+
+void Estatisticas(tEstatisticas estatisticas, FILE *estatisticasf){
+    fprintf(estatisticasf, "Numero de movimentos: %d\n", estatisticas.qtdmovimentos);
+    fprintf(estatisticasf, "Numero de movimentos sem pontuar: %d\n", estatisticas.moveSemPonto);
+    fprintf(estatisticasf, "Numero de movimentos para baixo: %d\n", estatisticas.moveBaixo);
+    fprintf(estatisticasf, "Numero de movimentos para cima: %d\n", estatisticas.moveCima);
+    fprintf(estatisticasf, "Numero de movimentos para esquerda: %d\n", estatisticas.moveEsq);
+    fprintf(estatisticasf, "Numero de movimentos para direita: %d\n", estatisticas.moveDir);
+
+}
+
+void ImprimeResumo(tMapa mapa, tCobra cobra, int id, FILE *resumo){
+    char movichar = ObtemCharDoMovimento(cobra);;
+    int movint = ObtemNumeroDoMovimento(cobra.estatisticas);;
+
+    if( id == MORTE ){
+        fprintf(resumo, "Movimento %d (%c) resultou no fim de jogo por conta de colisao\n", movint, movichar);
+
+    } else if( id == CORPO_INT ){
+        if( mapa.comidas == 0){
+            fprintf(resumo, "Movimento %d (%c) fez a cobra crescer para o tamanho %d, terminando o jogo\n", movint, movichar, cobra.tamanho+1);
+
+        } else {
+            fprintf(resumo, "Movimento %d (%c) fez a cobra crescer para o tamanho %d\n", movint, movichar, cobra.tamanho+1);
+
+        }
+    } else if( id == PONTOS ){
+        fprintf(resumo, "Movimento %d (%c) gerou dinheiro\n", movint, movichar);
+
     }
 }
 
 /* Funcoes int */
 
-int AtualizaJogo(tMapa mapa, tCobra cobra){
-    char atualiza; //variavel p auxiliar na atualizacao da situacao do jogo
+int IdentificaCaraceterSucessor(tMapa mapa, tCobra cobra){
+    char caracter; //variavel p auxiliar na atualizacao da situacao do jogo
 
-    atualiza = mapa.mapa[cobra.linhaAtual][cobra.colunaAtual];
+    caracter = mapa.mapa[cobra.linhaAtual][cobra.colunaAtual];
 
-    if( atualiza == COMIDA )
+    if( caracter == COMIDA )
         return 1;
-    else if( atualiza == DINHEIRO )
+    else if( caracter == DINHEIRO )
         return 2;
-    else if( atualiza == PAREDE )
+    else if( caracter == PAREDE || caracter == cobra.corpoChar )
         return 3;
-    else if( atualiza == PORTAL )
+    else if( cobra.linhaAtual < 0 || cobra.colunaAtual < 0 || cobra.linhaAtual >= mapa.linhas || cobra.colunaAtual >= mapa.colunas )
         return 4;
     else
-        return 5;
+        return 0;
 }
 
 int DefineGanhouOuPerdeu(tMapa mapa){
@@ -427,4 +756,22 @@ int DefineGanhouOuPerdeu(tMapa mapa){
         return 1;
     } else 
         return 0;
+}
+
+int ObtemPontuacao(tEstatisticas estatisticas){
+    return estatisticas.pontuacao;
+}
+
+int ObtemNumeroDoMovimento(tEstatisticas estatisticas){
+    return estatisticas.qtdmovimentos;
+}
+
+int CobraMortaOuNao(tCobra cobra){
+    return cobra.morta;
+}
+
+/* Funcao char */
+
+char ObtemCharDoMovimento(tCobra cobra){
+    return cobra.movimento;
 }
