@@ -110,7 +110,7 @@ tJogo RealizaJogo(tJogo jogo);
 tJogo AtualizaJogo(tJogo jogo, FILE *resumo);
 
 tCobra InicializaCobra(tMapa mapa);
-tCobra DefineCharMovimento(tCobra cobra, char movimento);
+tCobra DefineCharComandoMovimento(tCobra cobra, char movimento);
 tCobra AlteraPosicaoAnterior(tCobra cobra);
 tCobra MovimentaCobra(tMapa mapa, tCobra cobra);
 tCobra MovimentaCobraHorario(tCobra cobra);
@@ -212,7 +212,7 @@ tJogo RealizaJogo(tJogo jogo){
     resumo = fopen("resumo.txt", "w");
 
     while(fscanf(movimentos, "%c\n", &movimento) == 1){
-        jogo.cobra = DefineCharMovimento(jogo.cobra, movimento);
+        jogo.cobra = DefineCharComandoMovimento(jogo.cobra, movimento);
         jogo.cobra = AtualizaEstatisticas(jogo.cobra, MOVIMENTOS);
 
         //posicao atual da cobra vira anterior
@@ -222,6 +222,7 @@ tJogo RealizaJogo(tJogo jogo){
         jogo.cobra = MovimentaCobra( jogo.mapa, jogo.cobra );
 
         jogo = AtualizaJogo(jogo, resumo);
+        jogo.cobra = AtualizaPosicoesDaCobra( jogo.mapa, jogo.cobra );
 
         //imprime mapa depois do movimento
         fprintf(saida, "\nEstado do jogo apos o movimento '%c':\n", movimento);
@@ -319,7 +320,7 @@ tCobra InicializaCobra(tMapa mapa){
     return cobra;
 }
 
-tCobra DefineCharMovimento(tCobra cobra, char movimento){
+tCobra DefineCharComandoMovimento(tCobra cobra, char movimento){
     cobra.movimento = movimento;
 
     return cobra;
@@ -360,7 +361,6 @@ tCobra MovimentaCobra(tMapa mapa, tCobra cobra){
         if( cobra.linhaAtual < 0 || cobra.colunaAtual < 0 || cobra.linhaAtual >= mapa.linhas || cobra.colunaAtual >= mapa.colunas )
             cobra = AtravessaParede( mapa, cobra );
 
-        cobra = AtualizaPosicoesDaCobra( mapa, cobra );
         cobra = MovimentaCorpo( cobra );
 
     return cobra;
