@@ -61,11 +61,6 @@ typedef struct{
 } tPosicoes;
 
 typedef struct{
-    int mapa[MAX][MAX];
-} tHeatmap;
-
-
-typedef struct{
     int colunaAtual;
     int linhaAtual;
     int colunaAnterior;
@@ -85,7 +80,6 @@ typedef struct{
     tCorpo corpos[MAX];
     tEstatisticas estatisticas;
     tPosicoes posicoes[MAX*MAX];
-
 } tCobra;
 
 typedef struct{
@@ -107,7 +101,6 @@ typedef struct{
 typedef struct{
     tCobra cobra;
     tMapa mapa;
-    tHeatmap heatmap;
 } tJogo;
 
 /*Inicializacao das Funcoes do Programa*/
@@ -131,7 +124,7 @@ tCobra AtravessaParede(tMapa mapa, tCobra cobra);
 tCobra AtravessaTunel(tMapa mapa, tCobra cobra);
 tCobra InicializaPosicoesDaCobra(tMapa mapa, tCobra cobra);
 tCobra AtualizaPosicoesDaCobra(tMapa mapa, tCobra cobra);
-tCobra OrdenaCrescentePosicoes(tCobra cobra, int tam);
+tCobra OrdenaDecrescentePosicoes(tCobra cobra, int tam);
 tCobra TrocaVetorPosicaoAComB(tCobra cobra, int a, int b);
 
 tCorpo InicializaCorpo(tCobra cobra);
@@ -548,8 +541,7 @@ tCobra InicializaPosicoesDaCobra(tMapa mapa, tCobra cobra){
             for(mapa.c = 0, i; mapa.c < mapa.colunas; mapa.c++, i++){
                 cobra.posicoes[i] = InicializaPosicao(mapa.l, mapa.c);
             }
-        }
-    
+        }    
 
     return cobra;
 }
@@ -564,33 +556,36 @@ tCobra AtualizaPosicoesDaCobra(tMapa mapa, tCobra cobra){
     return cobra;
 }
 
-tCobra OrdenaCrescentePosicoes(tCobra cobra, int tam){
-    int i=0, j=0, frequenciaj, frequenciai, linhai, linhaj, colunai, colunaj;
+tCobra OrdenaDecrescentePosicoes(tCobra cobra, int tam){
+    int i, j, compara1, compara2;
+    tPosicoes aux;
 
-    for(i = 0; i <= tam; i++){
-        for(j=i+1; j <= tam+1; j++){
+    for(i = 0; i <= tam-1; i++){
+        for(j=i+1; j <= tam; j++){
 
-            frequenciai = ObtemFrequenciaPosicao( cobra.posicoes[i] );
-            frequenciaj = ObtemFrequenciaPosicao( cobra.posicoes[j] );
+            compara1 = ObtemFrequenciaPosicao(cobra.posicoes[i]);
+            compara2 = ObtemFrequenciaPosicao(cobra.posicoes[j]);
 
-            if( frequenciaj > frequenciai ){
-                cobra = TrocaVetorPosicaoAComB(cobra, j, i);
+            if(compara2 > compara1){
+                cobra = TrocaVetorPosicaoAComB(cobra, i, j); 
 
-            } else if( frequenciaj == frequenciai ){
-                
-                linhai = ObtemLinhaPosicao( cobra.posicoes[i] );
-                linhaj = ObtemLinhaPosicao( cobra.posicoes[j] );
+            } else if(compara2 == compara1){
 
-                if( linhaj < linhai ){
-                    cobra = TrocaVetorPosicaoAComB(cobra, i, j);
+                compara1 = ObtemLinhaPosicao(cobra.posicoes[i]);
+                compara2 = ObtemLinhaPosicao(cobra.posicoes[j]);
+
+                if(compara2 < compara1){
+                    cobra = TrocaVetorPosicaoAComB(cobra, i, j);  
+
+                } else if(compara2 == compara1){
+
+                    compara1 = ObtemColunaPosicao(cobra.posicoes[i]);
+                    compara2 = ObtemColunaPosicao(cobra.posicoes[j]);
+
+                    if(compara2 < compara1){
+                        cobra = TrocaVetorPosicaoAComB(cobra, i, j); 
+                    }
                 }
-            } else if( linhaj == linhai ){
-                
-                colunai = ObtemColunaPosicao( cobra.posicoes[i] );
-                colunaj = ObtemColunaPosicao( cobra.posicoes[j] );
-
-                if( colunaj < colunai )
-                    cobra = TrocaVetorPosicaoAComB(cobra, i, j);         
             }
         }
     }
@@ -860,6 +855,7 @@ tPosicoes AtualizaPosicao(tPosicoes posicao, int linha, int coluna){
 
     if( linha == posicao.linha && coluna == posicao.coluna ){
         posicao.vezes++;
+
     }
 
     return posicao;
@@ -960,8 +956,7 @@ void ImprimePosicoes(tMapa mapa, tCobra cobra){
     FILE *ranking;
     ranking = fopen("ranking.txt", "w");
 
-
-    cobra = OrdenaCrescentePosicoes( cobra, qtdmovimentos );
+    cobra = OrdenaDecrescentePosicoes( cobra, mapa.linhas*mapa.colunas );
 
     for(i = 0; i < (mapa.linhas*mapa.colunas); i++){
         
@@ -980,7 +975,6 @@ void ImprimePosicao(tPosicoes posicao, FILE *ranking){
 }
 
 void ImprimeHeatMap(tMapa mapa, tCobra cobra){
-    tHeatmap heatmap;
     int frequencia, i = 0;
     FILE *heatmapf;
     heatmapf = fopen("heatmap.txt", "w");
