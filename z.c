@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 
 /*Defines do Programa*/
 
@@ -22,8 +23,9 @@
 #define PAREDE '#'
 #define TUNEL  '@'
 
-/* Define o tamanho maximo permitido */
+/* Define o tamanho maximo permitido e END para enderecos */
 #define MAX 100
+#define END 1000
 
 /* Define ints para controle de cada rodada do jogo */
 #define NADA 0
@@ -95,6 +97,7 @@ typedef struct{
 } tMapa;
 
 typedef struct{
+    char endereco[END];
     tCobra cobra;
     tMapa mapa;
 } tJogo;
@@ -131,7 +134,7 @@ tCorpo AlteraPosicaoAnteriorDeCorpos(tCorpo corpo);
 tCorpo MoveCorpoAtrasDeCabeca(tCobra cobra, tCorpo corpo);
 tCorpo MoveCorpoAtrasDeCorpo(tCorpo anterior, tCorpo corpo);
 
-tMapa InicializaMapa();
+tMapa InicializaMapa(char endereco[]);
 tMapa DefineVazioAtras(tMapa mapa, tCobra cobra);
 tMapa DefineVazioAtrasDeCorpo(tMapa mapa, tCorpo corpo);
 tMapa DefineCabecaECorpo(tMapa mapa, tCobra cobra);
@@ -151,15 +154,15 @@ tEstatisticas DefineEstatisticas(tEstatisticas estatistica, int id);
 tPosicoes InicializaPosicao(int linha, int coluna);
 tPosicoes AtualizaPosicao(tPosicoes posicao, int linha, int coluna);
 
-void ImprimeInicializacao(tMapa mapa, tCobra cobra);
+void ImprimeInicializacao(tMapa mapa, tCobra cobra, char endereco[]);
 void ImprimeResultado(int num, FILE *saida, tCobra cobra);
 void ImprimeMapaDepoisDoMovimento(tMapa mapa, tCobra cobra, FILE *saida);
-void ImprimeEstatisticas(tCobra cobra);
+void ImprimeEstatisticas(tCobra cobra, char endereco[]);
 void Estatisticas(tEstatisticas estatisticas, FILE *estatisticasf);
 void ImprimeResumo(tMapa mapa, tCobra cobra, int id, FILE *resumo);
-void ImprimePosicoes(tMapa mapa, tCobra cobra);
+void ImprimePosicoes(tMapa mapa, tCobra cobra, char endereco[]);
 void ImprimePosicao(tPosicoes posicao, FILE *ranking);
-void ImprimeHeatMap(tMapa mapa, tCobra cobra);
+void ImprimeHeatMap(tMapa mapa, tCobra cobra, char endereco[]);
 
 int IdentificaCaraceterSucessor(tMapa mapa, tCobra cobra);
 int DefineGanhouOuPerdeu(tMapa mapa);
@@ -180,9 +183,16 @@ char ObtemCharDoMovimento(tCobra cobra);
 int main(int argc, char **argv){
     tJogo jogo;
 
+    /* Obtencao do diretorio */
+    if(argc <= 1){
+        printf("ERRO: O diretorio de arquivos nao foi informado\n");
+        exit(0);
+    }
+    sprintf(jogo.endereco, "%s", argv[1]);
+
     jogo = InicializaJogo(jogo);
     jogo = RealizaJogo(jogo);
-    ImprimeEstatisticas(jogo.cobra);
+    ImprimeEstatisticas(jogo.cobra, jogo.endereco);
 
     return 0;
 }
@@ -193,9 +203,9 @@ int main(int argc, char **argv){
 
 tJogo InicializaJogo(tJogo jogo){
 
-    jogo.mapa = InicializaMapa();
+    jogo.mapa = InicializaMapa(jogo.endereco);
     jogo.cobra = InicializaCobra(jogo.mapa);
-    ImprimeInicializacao(jogo.mapa, jogo.cobra);
+    ImprimeInicializacao(jogo.mapa, jogo.cobra, jogo.endereco);
 
     return jogo;
 }
@@ -204,60 +214,67 @@ tJogo RealizaJogo(tJogo jogo){
 /* Essa funcao tem o intuito de mover a cobra e interpretar os caracteres do mapa */
 
     FILE *movimentos, *saida, *resumo;
+    char saidaS[END+100], resumoS[END+100]; /* Variaveis para auxiliar na leitura do enderenco dos documentos, adicionei +100 pois o programa nao aceitava compilar 
+    jogo.endereco[END] e saidaS[END] com o mesmo tamanho*/
+    
     char movimento;    // Variavel para auxiliar na leitura dos comandos de movimento
     int ganhou, morta; // Variaveis p auxiliar na atualizacao da situacao do jogo
 
-    // movimentos = fopen("movimentos.txt", "r");
-    saida = fopen("minhasaida/saida.txt", "w");
-    resumo = fopen("minhasaida/resumo.txt", "w");
+    sprintf(saidaS, "%s/saida/saida.txt", jogo.endereco);
+    sprintf(resumoS, "%s/saida/resumo.txt", jogo.endereco);
 
-    //while(fscanf(movimentos, "%c\n", &movimento) == 1){
-    while(1){ scanf("%c", &movimento); if(movimento == MOVE_ANTIHORARIO || movimento == MOVE_HORARIO || movimento == CONTINUE){
+    saida = fopen(saidaS, "w");
+    resumo = fopen(resumoS, "w");
 
-        /* A funcao DefineCharComandoMovimento salva o comando de movimento afim de utiliza-lo na impressao do resumo
-        A funcao AtualizaEstatisticas utiliza*/
-        jogo.cobra = DefineCharComandoMovimento(jogo.cobra, movimento);
-        jogo.cobra = AtualizaEstatisticas(jogo.cobra, MOVIMENTOS);
+    while(1){ 
+        scanf("%c", &movimento);
+        
+        /* Garante que apenas os cracteres especificos para o movimento da cobra sejam lidos */
+        if(movimento == MOVE_ANTIHORARIO || movimento == MOVE_HORARIO || movimento == CONTINUE){
 
-        /* A funcao AlteraPosicaoAnterior altera a posicao anterior da cobra e, a funcao DefineVazioAtras usa a informacao
-        obtida pela funcao anterior para imprimir um vazio na posicao anterior do ultimo corpo da cobra ou da cabeca, ou seja, 
-        apaga a posicao anterior da cobra */
-        jogo.cobra = AlteraPosicaoAnterior(jogo.cobra);
-        jogo.mapa = DefineVazioAtras(jogo.mapa, jogo.cobra);
+            /* A funcao DefineCharComandoMovimento salva o comando de movimento afim de utiliza-lo na impressao do resumo
+            A funcao AtualizaEstatisticas utiliza*/
+            jogo.cobra = DefineCharComandoMovimento(jogo.cobra, movimento);
+            jogo.cobra = AtualizaEstatisticas(jogo.cobra, MOVIMENTOS);
 
-        jogo.cobra = MovimentaCobra( jogo.mapa, jogo.cobra );
+            /* A funcao AlteraPosicaoAnterior altera a posicao anterior da cobra e, a funcao DefineVazioAtras usa a informacao
+            obtida pela funcao anterior para imprimir um vazio na posicao anterior do ultimo corpo da cobra ou da cabeca, ou seja, 
+            apaga a posicao anterior da cobra */
+            jogo.cobra = AlteraPosicaoAnterior(jogo.cobra);
+            jogo.mapa = DefineVazioAtras(jogo.mapa, jogo.cobra);
 
-        /* A funcao AtualizaJogo eh utilizada para interpretar qual o caractere que a cabeca da cobra esta em cima e,
-        a partir disso, realizar a acao necessaria. Ja a AtualizaPosicoesDaCobra, salva a posicao em que a cabeca da
-        cobra esta, afim de ajudar no ranking e heatmap */
-        jogo = AtualizaJogo(jogo, resumo);
-        jogo.cobra = AtualizaPosicoesDaCobra( jogo.mapa, jogo.cobra );
+            jogo.cobra = MovimentaCobra( jogo.mapa, jogo.cobra );
 
-        /* Imprime mapa depois do movimento executado */
-        fprintf(saida, "\nEstado do jogo apos o movimento '%c':\n", movimento);
-        printf("\nEstado do jogo apos o movimento '%c':\n", movimento);
-        ImprimeMapaDepoisDoMovimento(jogo.mapa, jogo.cobra, saida);
+            /* A funcao AtualizaJogo eh utilizada para interpretar qual o caractere que a cabeca da cobra esta em cima e,
+            a partir disso, realizar a acao necessaria. Ja a AtualizaPosicoesDaCobra, salva a posicao em que a cabeca da
+            cobra esta, afim de ajudar no ranking e heatmap */
+            jogo = AtualizaJogo(jogo, resumo);
+            jogo.cobra = AtualizaPosicoesDaCobra( jogo.mapa, jogo.cobra );
+
+            /* Imprime mapa depois do movimento executado */
+            fprintf(saida, "\nEstado do jogo apos o movimento '%c':\n", movimento);
+            printf("\nEstado do jogo apos o movimento '%c':\n", movimento);
+            ImprimeMapaDepoisDoMovimento(jogo.mapa, jogo.cobra, saida);
 
 
-        /* A funcao a seguir verifica se a cobra ainda esta viva ou nao. Caso esteja, ela sai do while para terminar o jogo */
-        morta = CobraMortaOuNao(jogo.cobra);
-        if( morta )
-            break;
+            /* A funcao a seguir verifica se a cobra ainda esta viva ou nao. Caso esteja, ela sai do while para terminar o jogo */
+            morta = CobraMortaOuNao(jogo.cobra);
+            if( morta )
+                break;
 
-        /* A funcao a seguir verifica se ha comidas no mapa ou nao. Caso nao tenha, ela sai do while para terminar o jogo */
-        ganhou = DefineGanhouOuPerdeu(jogo.mapa);
-        if( ganhou )
-            break;
-    }
+            /* A funcao a seguir verifica se ha comidas no mapa ou nao. Caso nao tenha, ela sai do while para terminar o jogo */
+            ganhou = DefineGanhouOuPerdeu(jogo.mapa);
+            if( ganhou )
+                break;
+        }
     }
 
     /* As funcoes, respectivamente, imprimem o resultado no terminal e o ranking e heatmap nos seus respectivos documentos */
     ImprimeResultado(ganhou, saida, jogo.cobra);
-    ImprimePosicoes(jogo.mapa, jogo.cobra);
-    ImprimeHeatMap(jogo.mapa, jogo.cobra);
+    ImprimePosicoes(jogo.mapa, jogo.cobra, jogo.endereco);
+    ImprimeHeatMap(jogo.mapa, jogo.cobra, jogo.endereco);
 
     /* Fecha as pastas usadas */
-    //fclose(movimentos);
     fclose(resumo);
     fclose(saida);
 
@@ -273,9 +290,11 @@ tJogo AtualizaJogo(tJogo jogo, FILE *resumo){
     atualiza = IdentificaCaraceterSucessor(jogo.mapa, jogo.cobra);
 
     if( !atualiza ){
+        /* Cobra moveu e nao teve nada a frente */
         jogo.cobra = AtualizaEstatisticas(jogo.cobra, MOVESEMPONTOS);
 
     } else if( atualiza == COMIDA_INT ){
+        /* Cobra moveu e teve comida a frente */
 
         jogo.cobra = AumentaTamanho(jogo.mapa, jogo.cobra);
         jogo.mapa = DefineMaisUmCorpo(jogo.mapa, jogo.cobra);
@@ -286,12 +305,14 @@ tJogo AtualizaJogo(tJogo jogo, FILE *resumo){
         ImprimeResumo(jogo.mapa, jogo.cobra, COMIDA_INT, resumo);
 
     } else if( atualiza == PONTOS ){
+        /* Cobra moveu e teve dinheiro a frente */
 
         jogo.cobra = AtualizaEstatisticas(jogo.cobra, PONTOS);
 
         ImprimeResumo(jogo.mapa, jogo.cobra, PONTOS, resumo);
 
     } else if( atualiza == MORTE ){
+        /* Cobra moveu e teve obstaculos a frente */
 
         jogo.cobra = MataACobra(jogo.cobra);
         jogo.cobra = AtualizaEstatisticas(jogo.cobra, MOVESEMPONTOS);
@@ -299,6 +320,7 @@ tJogo AtualizaJogo(tJogo jogo, FILE *resumo){
         ImprimeResumo(jogo.mapa, jogo.cobra, MORTE, resumo);
 
     } else if( atualiza == PORTAL_INT ){
+        /* Cobra moveu e teve portal a frente */
 
         jogo.cobra = AtravessaTunel(jogo.mapa, jogo.cobra);
 
@@ -309,6 +331,7 @@ tJogo AtualizaJogo(tJogo jogo, FILE *resumo){
     jogo.mapa = DefineCabecaECorpo(jogo.mapa, jogo.cobra);
     /* A funcao DefineCabecaECorpo define no mapa onde vai ser a cabeca e o corpo da cobra, para ser impresso depois por outra funcao */
     /* No geral, a maioria das minhas funcoes "Define" tem esse intuito de apenas definir algo para ser utilizado por outra funcao depois */
+    
     jogo.cobra = VerificaCabecaECorpo(jogo.mapa, jogo.cobra);
     /* A funcao VerificaCabecaECorpo serve para acertar um bug que estava dando, como meu corpo eh definido depois da cabeca, quando a cobra entrava
     em um portal com 1 bloco de distancia e 1 corpo ela nao morria. Agora, quando isso acontece, ela morre */
@@ -700,7 +723,7 @@ tCorpo InicializaCorpoAtrasDeCorpo(tCorpo corpo){
 }
 
 tCorpo AlteraPosicaoAnteriorDeCorpos(tCorpo corpo){
-/* mesmo intuito da funcao AlteraPosicaoAnterior explicada anteriormente */
+/* Mesmo intuito da funcao AlteraPosicaoAnterior explicada anteriormente */
 
     corpo.linhaAnterior = corpo.linhaAtual;
     corpo.colunaAnterior = corpo.colunaAtual;
@@ -725,11 +748,19 @@ tCorpo MoveCorpoAtrasDeCorpo(tCorpo anterior, tCorpo corpo){
 
 /* Funcoes tMapa */
 
-tMapa InicializaMapa(){
+tMapa InicializaMapa(char endereco[]){
     FILE *mapaf;
     tMapa mapa;
+    char mapaS[END];
 
-    mapaf = fopen("mapa.txt", "r");
+    /* Abertura do mapa por meio de arquivos */
+    sprintf(mapaS, "%s/mapa.txt", endereco);
+    mapaf = fopen(mapaS, "r");
+
+    if( !mapaf ){
+        printf("Nao existe o arquivo mapa.txt no diretorio %s.\n", endereco);
+        exit(0);
+    }
 
     /* Define o tamanho do mapa e inicializa as comidas */
     fscanf(mapaf, "%d %d%*c", &mapa.linhas, &mapa.colunas);
@@ -765,7 +796,7 @@ tMapa InicializaMapa(){
 
         }
     }
-    
+
     fclose(mapaf);
 
     return mapa;
@@ -944,21 +975,23 @@ tPosicoes AtualizaPosicao(tPosicoes posicao, int linha, int coluna){
 
 /* Funcoes void */
 
-void ImprimeInicializacao(tMapa mapa, tCobra cobra){
+void ImprimeInicializacao(tMapa mapa, tCobra cobra, char endereco[]){
     FILE *inicializacaof;
+    char inicializacaoS[END];
 
-    inicializacaof = fopen("minhasaida/inicializacao.txt", "w");
+    sprintf(inicializacaoS, "%s/saida/inicializacao.txt", endereco);
+    inicializacaof = fopen(inicializacaoS, "w");
 
     for(mapa.l=0; mapa.l < mapa.linhas; mapa.l++){
 
         for(mapa.c=0; mapa.c < mapa.colunas; mapa.c++){
 
             fprintf(inicializacaof, "%c", mapa.mapa[mapa.l][mapa.c]);
-            printf("%c", mapa.mapa[mapa.l][mapa.c]);
+            //printf("%c", mapa.mapa[mapa.l][mapa.c]);
         }
 
         fprintf(inicializacaof, "\n");
-        printf("\n");
+        //printf("\n");
     }
 
     fprintf(inicializacaof, "A cobra comecara o jogo na linha %d e coluna %d\n", cobra.linhaAtual+1, cobra.colunaAtual+1);                                                
@@ -1001,9 +1034,12 @@ void ImprimeMapaDepoisDoMovimento(tMapa mapa, tCobra cobra, FILE *saida){
         printf("Pontuacao: %d\n", pontuacao);
 }
 
-void ImprimeEstatisticas(tCobra cobra){
+void ImprimeEstatisticas(tCobra cobra, char endereco[]){
     FILE *estatisticas;
-    estatisticas = fopen("minhasaida/estatisticas.txt", "w");
+    char estatisticasS[END];
+
+    sprintf(estatisticasS, "%s/saida/estatisticas.txt", endereco);
+    estatisticas = fopen(estatisticasS, "w");
 
     Estatisticas(cobra.estatisticas, estatisticas);
 
@@ -1043,12 +1079,15 @@ void ImprimeResumo(tMapa mapa, tCobra cobra, int id, FILE *resumo){
     }
 }
 
-void ImprimePosicoes(tMapa mapa, tCobra cobra){
+void ImprimePosicoes(tMapa mapa, tCobra cobra, char endereco[]){
 /* Ordena as posicoes de acordo com os requisitos pedidos o as imprime em ordem */
 
     int i, qtdmovimentos = ObtemQuantidadeDeMovimentos(cobra.estatisticas);
     FILE *ranking;
-    ranking = fopen("minhasaida/ranking.txt", "w");
+    char rankingS[END];
+
+    sprintf(rankingS, "%s/saida/ranking.txt", endereco);
+    ranking = fopen(rankingS, "w");
 
     cobra = OrdenaDecrescentePosicoes( cobra, mapa.linhas*mapa.colunas );
 
@@ -1068,10 +1107,13 @@ void ImprimePosicao(tPosicoes posicao, FILE *ranking){
     }
 }
 
-void ImprimeHeatMap(tMapa mapa, tCobra cobra){
+void ImprimeHeatMap(tMapa mapa, tCobra cobra, char endereco[]){
     int frequencia, i = 0;
     FILE *heatmapf;
-    heatmapf = fopen("minhasaida/heatmap.txt", "w");
+    char heatmapS[END];
+    
+    sprintf(heatmapS, "%s/saida/heatmap.txt", endereco);
+    heatmapf = fopen(heatmapS, "w");
 
     for(mapa.l = 0; mapa.l < mapa.linhas; mapa.l++){
         for(mapa.c = 0, i; mapa.c < mapa.colunas; mapa.c++, i++){
