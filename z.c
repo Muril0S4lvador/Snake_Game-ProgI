@@ -24,7 +24,7 @@
 #define TUNEL  '@'
 
 /* Define o tamanho maximo permitido e END para enderecos */
-#define MAX 100
+#define MAX 101
 #define END 1000
 
 /* Define ints para controle de cada rodada do jogo */
@@ -116,7 +116,6 @@ tCobra MovimentaCobraHorario(tCobra cobra);
 tCobra MovimentaCobraAntiHorario(tCobra cobra);
 tCobra MovimentaCobraContinue(tCobra cobra);
 tCobra MovimentaCorpo(tCobra cobra);
-tCobra VerificaCabecaECorpo(tMapa mapa, tCobra cobra);
 tCobra AumentaTamanho(tMapa mapa, tCobra cobra);
 tCobra AtualizaEstatisticas(tCobra cobra, int id);
 tCobra MataACobra(tCobra cobra);
@@ -165,6 +164,7 @@ void ImprimePosicao(tPosicoes posicao, FILE *ranking);
 void ImprimeHeatMap(tMapa mapa, tCobra cobra, char endereco[]);
 
 int IdentificaCaraceterSucessor(tMapa mapa, tCobra cobra);
+int VerificaCabecaECorpo(tMapa mapa, tCobra cobra);
 int DefineGanhouOuPerdeu(tMapa mapa);
 int ObtemPontuacao(tEstatisticas estatisticas);
 int ObtemNumeroDoMovimento(tEstatisticas estatisticas);
@@ -284,10 +284,8 @@ tJogo RealizaJogo(tJogo jogo){
 tJogo AtualizaJogo(tJogo jogo, FILE *resumo){
 /* Essa funcao tem o intuito de identificar qual o caractere que a cobra esta indo e, assim, fazer as atualizacoes necessarias */
 
-    int atualiza;
-
     /* Retorna um numero de acordo com o caracter lido */
-    atualiza = IdentificaCaraceterSucessor(jogo.mapa, jogo.cobra);
+    int atualiza = IdentificaCaraceterSucessor(jogo.mapa, jogo.cobra);
 
     if( !atualiza ){
         /* Cobra moveu e nao teve nada a frente */
@@ -331,10 +329,16 @@ tJogo AtualizaJogo(tJogo jogo, FILE *resumo){
     jogo.mapa = DefineCabecaECorpo(jogo.mapa, jogo.cobra);
     /* A funcao DefineCabecaECorpo define no mapa onde vai ser a cabeca e o corpo da cobra, para ser impresso depois por outra funcao */
     /* No geral, a maioria das minhas funcoes "Define" tem esse intuito de apenas definir algo para ser utilizado por outra funcao depois */
-    
-    jogo.cobra = VerificaCabecaECorpo(jogo.mapa, jogo.cobra);
-    /* A funcao VerificaCabecaECorpo serve para acertar um bug que estava dando, como meu corpo eh definido depois da cabeca, quando a cobra entrava
-    em um portal com 1 bloco de distancia e 1 corpo ela nao morria. Agora, quando isso acontece, ela morre */
+
+    int verifica = VerificaCabecaECorpo(jogo.mapa, jogo.cobra);
+    if(verifica){
+
+        jogo.cobra = MataACobra(jogo.cobra);
+        ImprimeResumo(jogo.mapa, jogo.cobra, MORTE, resumo);
+
+        /* A funcao VerificaCabecaECorpo serve para acertar um bug que estava dando, como meu corpo eh definido depois da cabeca, quando a cobra entrava
+        em um portal com 1 bloco de distancia e 1 corpo ela nao morria. Agora, quando isso acontece, ela morre */
+    }
 
     return jogo;
 }
@@ -523,18 +527,6 @@ tCobra MovimentaCorpo(tCobra cobra){
     return cobra;
 }
 
-tCobra VerificaCabecaECorpo(tMapa mapa, tCobra cobra){
-    int linhaatualdocorpo = ObtemLinhaAtualCorpo(cobra.corpos[cobra.tamanho-1]),
-    colunaatualdocorpo = ObtemColunaAtualCorpo(cobra.corpos[cobra.tamanho-1]);
-
-    if( cobra.tamanho > 0 ){
-        if( cobra.linhaAtual == linhaatualdocorpo && cobra.colunaAtual == colunaatualdocorpo )
-            cobra = MataACobra( cobra );
-    }
-
-    return cobra;
-}
-
 tCobra AumentaTamanho(tMapa mapa, tCobra cobra){
    
     cobra.tamanho++;
@@ -554,6 +546,7 @@ tCobra AtualizaEstatisticas(tCobra cobra, int id){
 tCobra MataACobra(tCobra cobra){
 /* Mata a cobra e muda seu corpo e cabeca */
 
+    /* cobra.morta == 1 (morta) || cobra.morta == 0 (viva) */
     cobra.morta = 1;
     cobra.cabeca = CORPO_MORTO;
     cobra.corpoChar = CORPO_MORTO;
@@ -621,10 +614,10 @@ Se esta antes da linha/coluna 0 do mapa, a cabeca retorna a linha/coluna limite 
 
 tCobra InicializaPosicoesDaCobra(tMapa mapa, tCobra cobra){
 /* Cria um vetor com todas as posicoes possiveis pela cobra e zera a posicao.vezes, que representa a frequencia que a cobra foi naquela posicao */
-    int i;
+    int i=0;
 
     for(mapa.l = 0; mapa.l < mapa.linhas; mapa.l++){
-        for(mapa.c = 0, i; mapa.c < mapa.colunas; mapa.c++, i++){
+        for(mapa.c = 0, i; mapa.c < mapa.colunas && i <= (MAX*MAX); mapa.c++, i++){
             cobra.posicoes[i] = InicializaPosicao(mapa.l, mapa.c);
         }
     }    
@@ -1149,6 +1142,19 @@ int IdentificaCaraceterSucessor(tMapa mapa, tCobra cobra){
         return 4;
     else
         return 0;
+}
+
+int VerificaCabecaECorpo(tMapa mapa, tCobra cobra){
+    int linhaatualdocorpo = ObtemLinhaAtualCorpo(cobra.corpos[cobra.tamanho-1]),
+    colunaatualdocorpo = ObtemColunaAtualCorpo(cobra.corpos[cobra.tamanho-1]);
+
+    if( cobra.tamanho > 0 && !cobra.morta ){
+        if( cobra.linhaAtual == linhaatualdocorpo && cobra.colunaAtual == colunaatualdocorpo ){
+            return 1;
+        }
+    }
+
+    return 0;
 }
 
 int DefineGanhouOuPerdeu(tMapa mapa){
