@@ -3,7 +3,7 @@ Trabalho de Programação I
 
 Jogo da Cobrinha no terminal
 
-Instruções:
+Instruções:\n
 Vence quando comer todas as comidas do mapa
 
 Como Jogar:
