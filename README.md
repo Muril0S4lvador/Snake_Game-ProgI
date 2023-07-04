@@ -3,7 +3,7 @@ Trabalho de Programação I
 
 Jogo da Cobrinha no terminal
 
-Instruções: Vence quando comer todas as comidas do mapa
+Instruções: Vence quando comer todas as comidas(*) do mapa
 
 Como Jogar: As teclas de movimento são "a", "h" e "c", sendo:
 
